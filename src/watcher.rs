@@ -1,5 +1,5 @@
 use notify::{recommended_watcher, EventKind, Watcher};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
 
 use crate::utils::stringe;
@@ -10,7 +10,7 @@ pub struct DirWatcher {
 }
 
 impl DirWatcher {
-    pub fn new(path: PathBuf) -> Result<Self, String> {
+    pub fn new(path: &Path) -> Result<Self, String> {
         let (tx, rx) = channel();
         let mut watcher = stringe(
             "error creating file watcher",
@@ -27,7 +27,7 @@ impl DirWatcher {
         )?;
         stringe(
             "Error starting watcher",
-            watcher.watch(path.as_path(), notify::RecursiveMode::Recursive),
+            watcher.watch(path, notify::RecursiveMode::Recursive),
         )?;
         Ok(Self {
             rx,
