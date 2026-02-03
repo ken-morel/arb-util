@@ -12,7 +12,7 @@ pub fn localization_getter(n: &String) -> String {
     format!("AppLocalizations.of(context)!.{n}")
 }
 
-pub fn id_string(s: String) -> String {
+pub fn id_string(s: &str) -> String {
     let mut temp = String::new();
 
     for c in s.chars() {

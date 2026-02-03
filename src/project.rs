@@ -21,8 +21,10 @@ pub struct Project {
     pub arb_template: String,
     pub localizations_file: String,
 }
-
 impl Project {
+    pub fn arb_template_path(&self) -> PathBuf {
+        self.root_dir.join(&self.l10n_dir).join(&self.arb_template)
+    }
     pub fn load() -> Result<Self, String> {
         let root = stringe("could not get current directory", std::env::current_dir())?;
 
@@ -52,6 +54,13 @@ impl Project {
                 "Please, make sure your configuration arb-dir points to `lib/...`",
             ));
         }
+        // if !config.output_localization_file.starts_with("app_")
+        //     || !config.output_localization_file.ends_with(".arb")
+        // {
+        //     return Err(String::from(
+        //         "Please make sure that your localization files have format `app_{locale}.arb`",
+        //     ));
+        // }
 
         Ok(Self {
             root_dir: root,

@@ -6,7 +6,7 @@ use crate::utils::stringe;
 
 pub struct DirWatcher {
     rx: Receiver<notify::Event>,
-    watcher: notify::INotifyWatcher,
+    _watcher: notify::INotifyWatcher,
 }
 
 impl DirWatcher {
@@ -29,7 +29,10 @@ impl DirWatcher {
             "Error starting watcher",
             watcher.watch(path.as_path(), notify::RecursiveMode::Recursive),
         )?;
-        Ok(Self { rx, watcher })
+        Ok(Self {
+            rx,
+            _watcher: watcher,
+        })
     }
 }
 

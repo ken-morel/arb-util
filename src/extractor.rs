@@ -1,8 +1,41 @@
-use crate::utils::{id_string, localization_getter};
+use crate::utils::{id_string, localization_getter, stringe};
 
 use super::{project::Project, watcher::DirWatcher};
 use regex::Regex;
 use std::{os::unix::ffi::OsStrExt, path::PathBuf};
+
+fn register_extracted_string(p: &Project, key: &str, value: &str) -> Result<(), String> {
+    let content = stringe(
+        "could not main arb file content",
+        std::fs::read_to_string(p.arb_template_path()),
+    )?;
+    let mut json: serde_json::Value = stringe(
+        "could not decode main arb file yaml",
+        serde_json::from_str(content.as_str()),
+    )?;
+    if let Some(obj) = json.as_object_mut() {
+        obj.insert(
+            key.to_string(),
+            serde_json::Value::String(value.to_string()),
+        );
+        let new_data = stringe(
+            "could not serialize modified arb file back to json ",
+            serde_json::to_string_pretty(&json),
+        )?;
+        if let Err(e) = stringe(
+            "could not write json content to arb file",
+            std::fs::write(p.arb_template_path(), new_data),
+        ) {
+            Err(e)
+        } else {
+            Ok(())
+        }
+    } else {
+        Err(String::from(
+            "Invalid arb file, arb file should contain json object",
+        ))
+    }
+}
 
 fn extract(p: &Project, file: PathBuf) {
     if let Ok(content) = std::fs::read_to_string(&file) {
@@ -18,8 +51,14 @@ fn extract(p: &Project, file: PathBuf) {
             content.remove(0);
             content.remove(0);
             content.remove(content.len() - 1);
-            let id = id_string(content);
+            let id = id_string(&content);
             result.replace_range(m.start()..m.end(), &localization_getter(&id));
+            if let Err(e) = register_extracted_string(p, &id, &content) {
+                println!(
+                    "Could not add extracted string to file: {0}={1}; {2}",
+                    id, content, e
+                );
+            }
         }
         if !content.eq(&result) {
             // check if the localizations file is already imported
