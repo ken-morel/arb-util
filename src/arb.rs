@@ -12,11 +12,15 @@ impl ArbFile {
     }
     pub fn read(&self) -> Result<serde_json::Value, String> {
         let content = stringe(
-            "could not main arb file content",
+            format!("could not read arb file content at {0:?}", self.path).as_str(),
             std::fs::read_to_string(&self.path),
         )?;
         stringe(
-            "could not decode main arb file yaml",
+            format!(
+                "could not decode main arb file json: {0:?} of {1:?} ",
+                content, self.path
+            )
+            .as_str(),
             serde_json::from_str(content.as_str()),
         )
     }
