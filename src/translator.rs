@@ -1,7 +1,6 @@
-use crate::{arb::ArbFile, project::Project, utils::stringe, watcher::DirWatcher};
-use rayon::prelude::*;
+use crate::{arb::ArbFile, project::Project, watcher::DirWatcher};
 use std::{
-    io::{Read, Write},
+    io::{ Write},
     process::{Command, Stdio},
 };
 
@@ -13,24 +12,23 @@ struct TranslationJob {
     arb_file: ArbFile,
 }
 
-fn run_translate_script(text: &str, lang: &str) -> Result<String, String> {
+fn translate(text: &str, lang: &str) -> Result<String, String> {
     let mut child = Command::new("translate")
         .arg(lang)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Could not launch translator {e}"))?;
-    if let (Some(stdin), Some(stdout)) = (&mut child.stdin, &mut child.stdout) {
-        stringe("Could not send text to translate to translate process",    stdin.write_all(text.as_bytes()))?;
-        let mut translation = String::new();
-        stringe(
-            "could not read translate process's output",
-            stdout.read_to_string(&mut translation),
-        )?;
-        Ok(translation.trim().to_string())
-    } else {
-        Err(String::from("Child object did not have stdin or stdout"))
+    
+    {
+        let mut stdin = child.stdin.take().expect("Failed to open stdin");
+        stdin.write_all(text.as_bytes()).expect("Failed to write to stdin");
+        // stdin is closed as it is dropped
     }
+
+    let output = child.wait_with_output().expect("Failed to read stdout");
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string().trim().to_string())
 }
 
 /// Scans all auxiliary ARB files and collects a list of strings that need translation.
@@ -89,15 +87,16 @@ pub fn start(p: Project) -> Result<(), String> {
             "[translator] Found {} initial job(s). Translating in parallel...",
             initial_jobs.len()
         );
-        initial_jobs.into_par_iter().for_each(|job| {
-            println!("[translator] Translating '{}' to {}...", job.key, job.lang);
-            match run_translate_script(&job.text, &job.lang) {
+        initial_jobs.into_iter().for_each(|job| {
+            match translate(&job.text, &job.lang) {
                 Ok(translated_text) => {
+                    println!("[translator] Translated {} to {}...", job.key, job.lang);
                     if let Err(e) = job.arb_file.add_key(&job.key, &translated_text) {
                         println!(
                             "[translator] ERROR: Failed to write translation for key '{}': {}",
                             job.key, e
                         );
+                        
                     }
                 }
                 Err(e) => {
@@ -114,7 +113,7 @@ pub fn start(p: Project) -> Result<(), String> {
 
     let l10n_dir = p.root_dir.join(&p.l10n_dir);
     for _ in DirWatcher::new(&l10n_dir)?.flatten() {
-        std::thread::sleep(std::time::Duration::from_millis(500)); // Debounce
+        std::thread::sleep(std::time::Duration::from_millis(1000)); // Debounce
 
         let jobs = find_untranslated_strings(&p)?;
         if !jobs.is_empty() {
@@ -122,9 +121,9 @@ pub fn start(p: Project) -> Result<(), String> {
                 "[translator] Found {} new job(s). Translating in parallel...",
                 jobs.len()
             );
-            jobs.into_par_iter().for_each(|job| {
+            jobs.into_iter().for_each(|job| {
                 println!("[translator] Translating '{}' to {}...", job.key, job.lang);
-                match run_translate_script(&job.text, &job.lang) {
+                match translate(&job.text, &job.lang) {
                     Ok(translated_text) => {
                         if let Err(e) = job.arb_file.add_key(&job.key, &translated_text) {
                             println!(
