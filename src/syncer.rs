@@ -1,3 +1,5 @@
+use std::process::Stdio;
+
 use crate::{arb::ArbFile, project::Project, watcher::DirWatcher};
 use serde_json::Value;
 
@@ -62,6 +64,14 @@ pub fn start(p: Project) -> Result<(), String> {
         if let Err(e) = sync_keys(&p) {
             println!("[syncer] Error during sync: {}", e);
         }
+        std::thread::sleep(std::time::Duration::from_millis(1000)); // Debounce
+        println!("[syncer] Calling flutter gen-l10n");
+        _ = std::process::Command::new("flutter")
+            .arg("gen-l10n")
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .and_then(|mut p| p.wait());
     }
     Ok(())
 }

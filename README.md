@@ -43,7 +43,8 @@ Located at [./src/syncer.rs](./src/syncer.rs)
 
 i.e when a key is added or changed in the main arb file, it add's
 the key to the other files with a leading '#' indiacting it's still to be
-translated.
+translated, then it calls `flutter gen-l10n` to update the generated files.
+
 
 ## The translator
 
