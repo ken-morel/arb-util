@@ -5,6 +5,7 @@ use regex::Regex;
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::process::Stdio;
 
 type ExtractResult = Result<Option<(String, BTreeMap<String, String>)>, String>;
 
@@ -151,6 +152,14 @@ pub fn start(p: Project) -> Result<(), String> {
                     path.display(),
                     e
                 );
+            } else {
+                std::thread::sleep(std::time::Duration::from_millis(3000)); // Debounce
+                _ = std::process::Command::new("flutter")
+                    .arg("gen-l10n")
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+                    .and_then(|mut p| p.wait());
             }
         }
     }
