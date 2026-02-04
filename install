@@ -1,0 +1,16 @@
+#!/usr/bin/sh
+
+#!/usr/bin/sh
+
+build() {
+  echo "Building arb-util"
+  cargo b --bin arb-util --all-features -r
+}
+install() {
+  echo "Installing rrr"
+
+  sudo rm -rf /usr/bin/arb-util
+  sudo cp target/release/arb-util /usr/bin/arb-util
+}
+
+build && install

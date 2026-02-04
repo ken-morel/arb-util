@@ -3,19 +3,26 @@
 When you see this: `rough` it means *rough on the edges*, a leading number indicates an index
 or relative roughliness, on 5.
 
+And that's it, my second rust project. arb-util is a tool I've already worked on in julia
+https://github.com/recordbreakersorg/arb-util . But here is it reimplemented, faster,
+more adaptible, well... *better*.
+
 Arb util is meant to help flutter developers like my friend https://github.com/dct-berinyuy (guess
 I'm not that really into flutter myself), by handling arb files for them, including extraction
 of marked strings from the file(very rough on the edges), and translating to other languages with
 a local model, since those google and copilot api things are quite that expensive(seriously,
 up to 6k per month!!!).
 
+to run just get to your project root and run it:
 
-And that's it, my second rust project. arb-util is a tool I've already worked on in julia
-https://github.com/recordbreakersorg/arb-util . But here is it reimplemented, faster,
-more adaptible, well... better.
+```bash
+arb-util
+```
+
+and there is an install script at repository root which build's and installs it to `/usr/bin/arb-util`.
 
 Just in case I did not say it before, arb-util is a tool with no subcommand(since it does just the
-same thing) it is devided into three files, and 3 parallel jobs:
+same thing) it is devided into three files, and 3 parallel jobs.
 
 ## The extractor
 
@@ -32,11 +39,16 @@ It's role is:
 ## The syncer
 
 Synchronises the template arb file with the other ones.
+Located at [./src/syncer.rs](./src/syncer.rs)
+
 i.e when a key is added or changed in the main arb file, it add's
 the key to the other files with a leading '#' indiacting it's still to be
 translated.
 
 ## The translator
+
+Translates the arb file strings to other languages.
+Located at [./src/translator.rs](./src/translator.rs)
 
 This assumes the existense of a `translate` script(see https://gist.github.com/4ac4e37ac61898a32b9142fcbb80c35b)
 which should be a simple script taking text to translate via stdin, target language as first
@@ -58,3 +70,4 @@ In future...:
 
 Don't forget to stage, and commit. Well, there are still changes that `arb-util` messes up with your
 files, though that shouldn't happen.
+
