@@ -97,7 +97,7 @@ fn ensure_localization_import(project: &Project, content: &mut String) {
         "import 'package:{}/{}/{}';",
         project.name, l10n_path_str, project.localizations_file
     );
-    let import_re = Regex::new(&format!("import.*{}.dart'", project.localizations_file)).unwrap();
+    let import_re = Regex::new(&format!("import.*{}'", project.localizations_file)).unwrap();
 
     if !import_re.is_match(content) {
         println!("[extractor] Adding import: {}", import_statement);
