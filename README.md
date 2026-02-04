@@ -13,6 +13,8 @@ of marked strings from the file(very rough on the edges), and translating to oth
 a local model, since those google and copilot api things are quite that expensive(seriously,
 up to 6k per month!!!).
 
+## usage
+
 to run just get to your project root and run it:
 
 ```bash
@@ -20,6 +22,14 @@ arb-util
 ```
 
 and there is an install script at repository root which build's and installs it to `/usr/bin/arb-util`.
+
+Then to mark strings to be extracted, preceed them with a `_` and save, arb-util should replace
+them fast enough, so if you're on an editor like helix which does not reload files modified by external
+processes you should reload pretty must just after.
+
+You can still edit the main arb file(which will invalidate translations in the other ones), or
+alter the translations in an other arb file, but preferably kill `arb-util` before doing that,
+to help you this's the command: `pkill -9 arb-util`, good time!
 
 Just in case I did not say it before, arb-util is a tool with no subcommand(since it does just the
 same thing) it is devided into three files, and 3 parallel jobs.
