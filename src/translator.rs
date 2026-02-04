@@ -60,18 +60,21 @@ fn find_untranslated_strings(project: &Project) -> Result<Vec<TranslationJob>, S
         }
 
         let arb_file = ArbFile::new(path.clone());
-        if let Ok(obj) = arb_file.read() {
-            for (key, value) in obj {
-                if let Some(s_val) = value.as_str() && s_val.starts_with('#') {
-                        jobs.push(TranslationJob {
-                            key: key.clone(),
-                            text: s_val.strip_prefix('#').unwrap().to_string(),
-                            lang: lang.to_string(),
-                            arb_file: ArbFile::new(arb_file.path.clone()),
-                        });
+        match arb_file.read() {
+            Ok(obj) => {
+                for (key, value) in obj {
+                            if let Some(s_val) = value.as_str() && s_val.starts_with('#') {
+                                    jobs.push(TranslationJob {
+                                        key: key.clone(),
+                                        text: s_val.strip_prefix('#').unwrap().to_string(),
+                                        lang: lang.to_string(),
+                                        arb_file: ArbFile::new(arb_file.path.clone()),
+                                    });
                     
-                }
+                            }
+                        }
             }
+            Err(e) => println!("[translator] Error reading arb file {e}"),
         }
     }
     Ok(jobs)
@@ -82,11 +85,12 @@ pub fn start(p: Project) -> Result<(), String> {
     println!("[translator] Started. Performing initial scan for untranslated strings...");
 
     let initial_jobs = find_untranslated_strings(&p)?;
-    if !initial_jobs.is_empty() {
         println!(
             "[translator] Found {} initial job(s). Translating in parallel...",
             initial_jobs.len()
         );
+    if !initial_jobs.is_empty() {
+        
         initial_jobs.into_iter().for_each(|job| {
             match translate(&job.text, &job.lang) {
                 Ok(translated_text) => {
@@ -122,24 +126,25 @@ pub fn start(p: Project) -> Result<(), String> {
                 jobs.len()
             );
             jobs.into_iter().for_each(|job| {
-                println!("[translator] Translating '{}' to {}...", job.key, job.lang);
+                println!("[translator] Translating '{}' to {}", job.key, job.lang);
                 match translate(&job.text, &job.lang) {
                     Ok(translated_text) => {
                         if let Err(e) = job.arb_file.add_key(&job.key, &translated_text) {
                             println!(
-                                "[translator] ERROR: Failed to write translation for key '{}': {}",
+                                "  [translator] ERROR: Failed to write translation for key '{}': {}",
                                 job.key, e
                             );
                         }
                     }
                     Err(e) => {
                         println!(
-                            "[translator] ERROR: Failed to translate key '{}': {}",
+                            "  [translator] ERROR: Failed to translate key '{}': {}",
                             job.key, e
                         );
                     }
                 }
             });
+            println!("[translator] Translation completed");
         }
     }
     Ok(())

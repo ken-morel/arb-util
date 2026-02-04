@@ -9,7 +9,7 @@ build() {
 install() {
   echo "Installing rrr"
 
-  sudo rm -rf /usr/bin/arb-util
+  sudo rm /usr/bin/arb-util || echo "arb-util was not installed, I see..."
   sudo cp target/release/arb-util /usr/bin/arb-util
 }
 

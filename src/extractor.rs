@@ -15,7 +15,7 @@ fn extract_from_file(file: &Path) -> ExtractResult {
         "could not read the file content",
         std::fs::read_to_string(file),
     )?;
-    let translation_string_re = Regex::new("_\"((?:\\\\\"|[^\"])*)\"").unwrap();
+    let translation_string_re = Regex::new("_([\"'](?:\\\\\"|\\\\'|[^\"'])*[\"'])").unwrap();
 
     let mut new_strings = BTreeMap::new();
     let mut new_content = content.clone();
@@ -28,14 +28,21 @@ fn extract_from_file(file: &Path) -> ExtractResult {
         .rev()
     {
         let full_match = cap.get(0).unwrap();
-        let inner_string = cap.get(1).unwrap().as_str();
+        let raw_inner_string = cap.get(1).unwrap().as_str();
+        let string_content = match serde_json::from_str(raw_inner_string) {
+            Ok(o) => o,
+            Err(e) => {
+                println!("Could not parse dart string: {e}");
+                continue;
+            }
+        };
 
-        let id = id_string(inner_string);
+        let id = id_string(string_content);
         new_content.replace_range(
             full_match.start()..full_match.end(),
             &localization_getter(&id),
         );
-        new_strings.entry(id).or_insert(inner_string.to_string());
+        new_strings.entry(id).or_insert(string_content.to_string());
         changed = true;
     }
 
@@ -94,14 +101,14 @@ fn ensure_localization_import(project: &Project, content: &mut String) {
         .to_str()
         .unwrap();
     let import_statement = format!(
-        "import 'package:{}/{}/{}';",
+        "import 'package:{}/{}/{}';\n",
         project.name, l10n_path_str, project.localizations_file
     );
-    let import_re = Regex::new(&format!("import.*{}'", project.localizations_file)).unwrap();
+    let import_re = Regex::new(&format!("import.*{}", project.localizations_file)).unwrap();
 
     if !import_re.is_match(content) {
         println!("[extractor] Adding import: {}", import_statement);
-        content.insert_str(0, &format!("{}\n", import_statement));
+        content.insert_str(0, &import_statement);
     }
 }
 
