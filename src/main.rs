@@ -17,7 +17,9 @@ fn main() -> Result<(), String> {
 
     extractor_handle.join().expect("Extractor thread panicked");
     syncer_handle.join().expect("Syncer thread panicked");
-    translator_handle.join().expect("Translator thread panicked");
-    
+    translator_handle
+        .join()
+        .expect("Translator thread panicked");
+
     Ok(())
 }

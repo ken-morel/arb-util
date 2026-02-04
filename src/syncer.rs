@@ -5,35 +5,35 @@ use serde_json::Value;
 fn sync_keys(project: &Project) -> Result<(), String> {
     let template_path = project.arb_template_path();
     let template_arb = ArbFile::new(template_path.clone());
-    let template_content = template_arb.read()?;
-    let template_keys = template_content
-        .as_object()
-        .ok_or("Template ARB file is not a valid JSON object.")?
-        .keys()
-        .filter(|k| !k.starts_with('@')) // We only care about actual content keys
-        .collect::<Vec<_>>();
+    let template = template_arb.read()?;
 
     let l10n_dir = project.root_dir.join(&project.l10n_dir);
-    
+
     if let Ok(entries) = std::fs::read_dir(l10n_dir) {
         for dirent in entries.flatten() {
             let path = dirent.path();
             // Skip the template file itself and any non-ARB files
-            if path == template_path || path.extension().map_or(true, |ext| ext != "arb") {
+            if dirent
+                .file_name()
+                .to_str()
+                .is_none_or( |s| s.eq(&project.arb_template)) // default to true means we skip files with strange names
+                || path.extension().is_none_or(|ext| ext != "arb")
+            {
                 continue;
             }
 
             println!("[syncer] Checking file: {:?}", path.file_name().unwrap());
             let other_arb = ArbFile::new(path);
-            let mut other_content_val = other_arb.read()?;
-            let other_content = other_content_val
-                .as_object_mut()
-                .ok_or(format!("{:?} is not a valid JSON object.", other_arb.path))?;
+            let mut other_content = other_arb.read()?;
 
             let mut changed = false;
-            for &key in &template_keys {
+            for &key in &template
+                .keys()
+                .filter(|k| !k.starts_with('@'))
+                .collect::<Vec<_>>()
+            {
                 if !other_content.contains_key(key) {
-                    let template_value = template_content.get(key).unwrap().as_str().unwrap_or("");
+                    let template_value = template.get(key).unwrap().as_str().unwrap_or("");
                     let placeholder = format!("#{}", template_value);
                     println!("  -> Adding missing key '{}' with placeholder", key);
                     other_content.insert(key.clone(), Value::String(placeholder));
@@ -42,7 +42,7 @@ fn sync_keys(project: &Project) -> Result<(), String> {
             }
 
             if changed {
-                other_arb.write(&Value::Object(other_content.clone()))?;
+                other_arb.write(&other_content)?;
             }
         }
     }
