@@ -68,7 +68,6 @@ argument(i.e the suffix in your arb file names, e.g en, fr, en-us) and outputs t
 It will run over the other arb files to look for untranslated strings(preceded with "#") and
 translate them sequentially.
 
-
 In future...:
 -  maybe make translation parallel.. It's not so hard, just add rayon and replace the `into_iter` to `into_par_iter`.
   but that WILL surely lead to race conditions in case of several translations in the same file.

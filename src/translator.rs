@@ -1,8 +1,10 @@
 use crate::{arb::ArbFile, project::Project, watcher::DirWatcher};
 use std::{
-    io::{ Write},
-    process::{Command, Stdio},
+    io::Write,
+    process::{Command, Stdio}, sync::mpsc::channel,
 };
+
+use rayon::prelude::*;
 
 #[derive(Debug)]
 struct TranslationJob {
@@ -125,16 +127,23 @@ pub fn start(p: Project) -> Result<(), String> {
                 "[translator] Found {} new job(s). Translating in parallel...",
                 jobs.len()
             );
-            jobs.into_iter().for_each(|job| {
+            let (tx, rx) = channel::<(TranslationJob, String)>();
+            let write_thread_handle = std::thread::spawn(move || {
+                for (job, translated_text) in rx {
+                    if let Err(e) = job.arb_file.add_key(&job.key, &translated_text) {
+                        println!(
+                            "  [translator] ERROR: Failed to write translation for key '{}': {}",
+                            job.key, e
+                        );
+                    }
+                }
+            });
+            jobs.into_par_iter().for_each(move |job| {
                 println!("[translator] Translating '{}' to {}", job.key, job.lang);
                 match translate(&job.text, &job.lang) {
                     Ok(translated_text) => {
-                        if let Err(e) = job.arb_file.add_key(&job.key, &translated_text) {
-                            println!(
-                                "  [translator] ERROR: Failed to write translation for key '{}': {}",
-                                job.key, e
-                            );
-                        }
+                        _ = tx.send((job, translated_text));
+                        
                     }
                     Err(e) => {
                         println!(
@@ -144,6 +153,9 @@ pub fn start(p: Project) -> Result<(), String> {
                     }
                 }
             });
+            if let Err(e) =  write_thread_handle.join() {
+                println!("[translator] Write thread had an error: {e:?}");
+            }
             println!("[translator] Translation completed");
         }
     }
