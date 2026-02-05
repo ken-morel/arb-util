@@ -15,7 +15,7 @@ fn extract_from_file(file: &Path) -> ExtractResult {
         "could not read the file content",
         std::fs::read_to_string(file),
     )?;
-    let translation_string_re = Regex::new("_(['](?:\\\\'|[^'])*['])").unwrap();
+    let translation_string_re = Regex::new("_(\"((?:\\\\\"|[^\"])*)\")").unwrap();
 
     let mut new_strings = BTreeMap::new();
     let mut new_content = content.clone();
@@ -32,7 +32,7 @@ fn extract_from_file(file: &Path) -> ExtractResult {
         let string_content = match serde_json::from_str(raw_inner_string) {
             Ok(o) => o,
             Err(e) => {
-                println!("Could not parse dart string: {e}");
+                println!("Could not parse dart string({raw_inner_string}): {e}");
                 continue;
             }
         };
