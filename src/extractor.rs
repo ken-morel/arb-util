@@ -15,7 +15,7 @@ fn extract_from_file(file: &Path) -> ExtractResult {
         "could not read the file content",
         std::fs::read_to_string(file),
     )?;
-    let translation_string_re = Regex::new("_([\"'](?:\\\\\"|\\\\'|[^\"'])*[\"'])").unwrap();
+    let translation_string_re = Regex::new("_(['](?:\\\\'|[^'])*['])").unwrap();
 
     let mut new_strings = BTreeMap::new();
     let mut new_content = content.clone();
