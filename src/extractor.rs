@@ -150,7 +150,6 @@ pub fn start(p: Project) -> Result<(), String> {
 
     for path in DirWatcher::new(&lib_dir)?.flatten() {
         if path.is_file() && path.extension().is_some_and(|ext| ext == "dart") {
-            println!("[extractor] File changed: {}", path.display());
             std::thread::sleep(std::time::Duration::from_millis(300)); // Debounce
             if let Err(e) = process_file(&p, &path) {
                 println!(
