@@ -136,7 +136,7 @@ fn process_file(p: &Project, path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn start(p: Project) -> Result<(), String> {
+pub async fn run(p: Project) -> Result<(), String> {
     let lib_dir = p.root_dir.join("lib");
     println!("[extractor] Starting initial scan of 'lib/' directory...");
     for entry in stringe("Could not list files in arb", std::fs::read_dir(&lib_dir))? {
@@ -161,12 +161,4 @@ pub fn start(p: Project) -> Result<(), String> {
         }
     }
     Ok(())
-}
-
-pub fn spawn(p: Project) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || {
-        if let Err(e) = start(p) {
-            println!("[extractor] Worker thread terminated with error: {e}");
-        }
-    })
 }

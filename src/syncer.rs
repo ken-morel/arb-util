@@ -51,7 +51,7 @@ fn sync_keys(project: &Project) -> Result<(), String> {
     Ok(())
 }
 
-pub fn start(p: Project) -> Result<(), String> {
+pub async fn run(p: Project) -> Result<(), String> {
     println!("[syncer] Started. Performing initial sync...");
     sync_keys(&p)?;
     println!("[syncer] Initial sync complete. Watching for changes in template ARB file...");
@@ -74,12 +74,4 @@ pub fn start(p: Project) -> Result<(), String> {
             .and_then(|mut p| p.wait());
     }
     Ok(())
-}
-
-pub fn spawn(p: Project) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || {
-        if let Err(e) = start(p) {
-            println!("[syncer] Worker thread terminated with error: {e}");
-        }
-    })
 }

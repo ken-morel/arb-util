@@ -1,10 +1,11 @@
-use crate::{arb::ArbFile, project::Project, watcher::DirWatcher};
-use std::{
-    io::Write,
-    process::{Command, Stdio}, sync::mpsc::channel,
-};
+use super::{arb::ArbFile, project::Project, watcher::DirWatcher};
+use std::
+    sync::mpsc::channel
 
-use rayon::prelude::*;
+;
+use jemini::{JeminiClient };
+
+
 
 #[derive(Debug)]
 struct TranslationJob {
@@ -14,24 +15,24 @@ struct TranslationJob {
     arb_file: ArbFile,
 }
 
-fn translate(text: &str, lang: &str) -> Result<String, String> {
-    let mut child = Command::new("translate")
-        .arg(lang)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Could not launch translator {e}"))?;
-    
-    {
-        let mut stdin = child.stdin.take().expect("Failed to open stdin");
-        stdin.write_all(text.as_bytes()).expect("Failed to write to stdin");
-        // stdin is closed as it is dropped
-    }
+pub async fn translate(text: &str, lang: &str) -> Result<String, String> {
+  let client = JeminiClient::new().map_err(|e| format!("Could not create JeminiClient: {e}"))?;
+  let system = format!(
+      "You are a highly efficient and accurate language translator.
+      Translate the following text into {}.
+      Provide only the translated text,
+      without any additional conversational content or explanations.",
+      lang,
+  );
+  let response  = client.text_only(&(system + "\n\n" + text)).await.map_err(|e| format!("Could not query gemini: {e}"))?;
+  dbg!(&response);
+  match response.most_recent() {
+      Some(t) => Ok(String::from(t)),
+      None => Err(String::from("Jemini sent no response"))
+  }
 
-    let output = child.wait_with_output().expect("Failed to read stdout");
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string().trim().to_string())
 }
+
 
 /// Scans all auxiliary ARB files and collects a list of strings that need translation.
 fn find_untranslated_strings(project: &Project) -> Result<Vec<TranslationJob>, String> {
@@ -72,7 +73,7 @@ fn find_untranslated_strings(project: &Project) -> Result<Vec<TranslationJob>, S
                                         lang: lang.to_string(),
                                         arb_file: ArbFile::new(arb_file.path.clone()),
                                     });
-                    
+
                             }
                         }
             }
@@ -83,7 +84,7 @@ fn find_untranslated_strings(project: &Project) -> Result<Vec<TranslationJob>, S
 }
 
 /// The main translation loop.
-pub fn start(p: Project) -> Result<(), String> {
+pub async fn run(p: Project) -> Result<(), String> {
     println!("[translator] Started. Performing initial scan for untranslated strings...");
 
     let initial_jobs = find_untranslated_strings(&p)?;
@@ -92,9 +93,8 @@ pub fn start(p: Project) -> Result<(), String> {
             initial_jobs.len()
         );
     if !initial_jobs.is_empty() {
-        
-        initial_jobs.into_iter().for_each(|job| {
-            match translate(&job.text, &job.lang) {
+        for job in initial_jobs.into_iter() {
+            match translate(&job.text, &job.lang).await {
                 Ok(translated_text) => {
                     println!("[translator] Translated {} to {}...", job.key, job.lang);
                     if let Err(e) = job.arb_file.add_key(&job.key, &translated_text) {
@@ -102,7 +102,7 @@ pub fn start(p: Project) -> Result<(), String> {
                             "[translator] ERROR: Failed to write translation for key '{}': {}",
                             job.key, e
                         );
-                        
+
                     }
                 }
                 Err(e) => {
@@ -112,7 +112,7 @@ pub fn start(p: Project) -> Result<(), String> {
                     );
                 }
             }
-        });
+        }
     }
 
     println!("[translator] Initial scan complete. Watching for changes in l10n directory...");
@@ -138,12 +138,12 @@ pub fn start(p: Project) -> Result<(), String> {
                     }
                 }
             });
-            jobs.into_par_iter().for_each(move |job| {
+            for job in jobs.into_iter() {
                 println!("[translator] Translating '{}' to {}", job.key, job.lang);
-                match translate(&job.text, &job.lang) {
+                match translate(&job.text, &job.lang).await {
                     Ok(translated_text) => {
                         _ = tx.send((job, translated_text));
-                        
+
                     }
                     Err(e) => {
                         println!(
@@ -152,7 +152,7 @@ pub fn start(p: Project) -> Result<(), String> {
                         );
                     }
                 }
-            });
+            }
             if let Err(e) =  write_thread_handle.join() {
                 println!("[translator] Write thread had an error: {e:?}");
             }
@@ -160,12 +160,4 @@ pub fn start(p: Project) -> Result<(), String> {
         }
     }
     Ok(())
-}
-
-pub fn spawn(p: Project) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || {
-        if let Err(e) = start(p) {
-            println!("[translator] Worker thread terminated with error: {e}");
-        }
-    })
 }
