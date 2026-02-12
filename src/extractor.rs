@@ -73,12 +73,13 @@ fn update_arb_file(
     let mut changed = false;
     for (key, value) in new_strings {
         if !arb_data.contains_key(key) {
-            println!("[extractor] Adding new key: {}", key);
             arb_data.insert(key.clone(), Value::String(value.clone()));
             let metadata_key = format!("@{}", key);
+            let metadata = create_metadata(value);
+            println!("[extractor] Adding new key: {key} with metadata {metadata:?}");
             arb_data
                 .entry(metadata_key)
-                .or_insert(Value::Object(Map::new()));
+                .or_insert(Value::Object(metadata));
             changed = true;
         }
     }
@@ -92,6 +93,23 @@ fn update_arb_file(
     }
 
     Ok(changed)
+}
+
+fn create_metadata(txt: &str) -> Map<String, Value> {
+    let mut metadata = Map::new();
+
+    let regex = Regex::new("\\{(\\w+)\\}").unwrap();
+
+    let mut placeholders = Map::new();
+    for captures in  regex.captures_iter(txt) {
+        let mut val = Map::new();
+        val.insert(String::from("type"), Value::String(String::from("String")));
+        placeholders.insert(String::from(captures.get(1).unwrap().as_str()), Value::Object(val));
+    }
+    if !placeholders.is_empty() {
+        metadata.insert(String::from("placeholders"), Value::Object(placeholders));
+    }
+    metadata
 }
 
 fn ensure_localization_import(project: &Project, content: &mut String) {

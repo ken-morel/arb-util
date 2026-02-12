@@ -63,16 +63,12 @@ fn find_untranslated_strings(project: &Project) -> Result<Vec<TranslationJob>, S
     Ok(jobs)
 }
 
-struct Boolainer {
-    value: bool,
-}
-
 
 pub async fn run(p: Project) -> Result<(), String> {
     let api_key = match env::var("GEMINI_API_KEY") {
         Ok(k) => k,
         Err(e) => {
-            println!("[translator] #################### GEMINI rate limit exceded ####################");
+            println!("[translator] #################### GEMINI_API_KEY not set ####################");
             print!("\x07");
             println!("[translator]                     Closing translation job");
             return Err(format!("{e}"));
@@ -85,7 +81,7 @@ pub async fn run(p: Project) -> Result<(), String> {
     let mut watcher =DirWatcher::new(&l10n_dir, true)?;
 
     while watcher.next().await.is_some() {
-        sleep(std::time::Duration::from_millis(5000)).await;
+        sleep(std::time::Duration::from_millis(10000)).await;
 
         let jobs = find_untranslated_strings(&p)?;
         if jobs.is_empty() {
@@ -133,7 +129,7 @@ pub async fn run(p: Project) -> Result<(), String> {
                         );
                     }
                     TranslateResult::RateLimitExceeded => {
-                        _ = rate_tx.send(()).await;
+                        _ = rate_tx.send(());
                     }
                 }
             });
@@ -179,8 +175,10 @@ pub async fn translate(api_key: &str,txt: &str, lang: &str) -> TranslateResult {
         1. Source Language Detection: Automatically detect the source language of the input text.
         2. Context and Nuance: Preserve the original meaning, tone, and cultural nuances of the text as much as possible.
         3. Output Format: Provide ONLY the full, translated text. Do not include any conversational filler, explanations, quotes around the output, or additional
-formatting. Ensure the output is clean and ready for direct use.",
-        lang
+formatting. Ensure the output is clean and ready for direct use.
+        4. Preverve whatever content you find within '{}' quotes in your translation.
+",
+        lang, "{}"
     );
 
     // Construct the JSON request body

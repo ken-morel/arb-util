@@ -18,9 +18,6 @@ async fn main() -> Result<(), String> {
     let syncer_handle = tokio::spawn(syncer::run(p.clone()));
     let translator_handle = tokio::spawn(translator::run(p.clone()));
 
-    // we will run the extractor on a different thread for reactivity
-
-
     extractor_handle.await.expect("Extractor task failed").expect("Extractor task failed");
     syncer_handle.await.expect("Extractor async task failed").expect("Syncer task failed");
     translator_handle.await.expect("Extractor async task failed").expect("Translator task failed");
