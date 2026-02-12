@@ -14,9 +14,11 @@ async fn main() -> Result<(), String> {
     let p = project::Project::load()?;
     println!("{p:#?}");
 
-    let extractor_handle = tokio::spawn(extractor::run(p.clone()));
+    let extractor_handle =tokio::spawn(extractor::run(p.clone()));
     let syncer_handle = tokio::spawn(syncer::run(p.clone()));
     let translator_handle = tokio::spawn(translator::run(p.clone()));
+
+    // we will run the extractor on a different thread for reactivity
 
 
     extractor_handle.await.expect("Extractor task failed").expect("Extractor task failed");

@@ -1,59 +1,69 @@
-use notify::{recommended_watcher, EventKind, Watcher};
+use notify::{recommended_watcher, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver};
+use tokio::sync::mpsc::{channel, Receiver};
 
 use crate::utils::stringe;
 
 pub struct DirWatcher {
-    rx: Receiver<notify::Event>,
-    _watcher: notify::INotifyWatcher,
+    rx: Receiver<Result<Event, notify::Error>>,
+    _watcher: RecommendedWatcher,
+    initial_yield: bool,
 }
 
 impl DirWatcher {
-    pub fn new(path: &Path) -> Result<Self, String> {
-        let (tx, rx) = channel();
+    pub fn new(path: &Path, initial_run: bool) -> Result<Self, String> {
+
+        let (tx, rx) = channel(100);
+
+
         let mut watcher = stringe(
             "error creating file watcher",
-            recommended_watcher(move |res: Result<notify::Event, notify::Error>| match res {
-                Ok(event) => {
-                    if let EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) =
-                        event.kind
-                    {
-                        tx.send(event).expect("Failed to send event");
-                    }
-                }
-                Err(e) => println!("watch error: {:?}", e),
+            recommended_watcher(move |res: Result<Event, notify::Error>| {
+                let _ = tx.blocking_send(res);
             }),
         )?;
+
+
         stringe(
             "Error starting watcher",
-            watcher.watch(path, notify::RecursiveMode::Recursive),
+            watcher.watch(path, RecursiveMode::Recursive),
         )?;
+
         Ok(Self {
             rx,
             _watcher: watcher,
+            initial_yield: initial_run,
         })
     }
-}
 
-impl Iterator for DirWatcher {
-    type Item = Option<PathBuf>;
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(match stringe("Recv error", self.rx.recv()) {
-            Ok(event) => {
-                if let notify::EventKind::Modify(notify::event::ModifyKind::Data(_)) = event.kind {
-                    for path in event.paths {
-                        if path.exists() {
-                            return Some(Some(path));
+    pub async fn next(&mut self) -> Option<PathBuf> {
+        if self.initial_yield {
+            self.initial_yield = false;
+            return Some(PathBuf::new());
+        }
+
+
+        while let Some(res) = self.rx.recv().await {
+            match res {
+                Ok(event) => {
+
+                    match event.kind {
+                        EventKind::Modify(_) | EventKind::Create(_) => {
+                            for path in event.paths {
+                                if path.exists() {
+                                    return Some(path);
+                                }
+                            }
                         }
+                        _ => continue,
                     }
                 }
-                None
+                Err(e) => {
+                    println!("watch error: {:?}", e);
+                    continue;
+                }
             }
-            Err(e) => {
-                println!("{e}");
-                None
-            }
-        })
+        }
+        None
     }
 }

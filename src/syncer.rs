@@ -2,9 +2,10 @@ use std::process::Stdio;
 
 use crate::{arb::ArbFile, project::Project, watcher::DirWatcher};
 use serde_json::Value;
+use tokio::time::sleep;
 
 /// Synchronizes keys from the template ARB file to all other ARB files in the directory.
-fn sync_keys(project: &Project) -> Result<(), String> {
+async fn sync_keys(project: &Project) -> Result<(), String> {
     let template_path = project.arb_template_path();
     let template_arb = ArbFile::new(template_path.clone());
     let template = template_arb.read()?;
@@ -48,30 +49,35 @@ fn sync_keys(project: &Project) -> Result<(), String> {
             }
         }
     }
+    flutter_gen().await;
     Ok(())
 }
 
-pub async fn run(p: Project) -> Result<(), String> {
-    println!("[syncer] Started. Performing initial sync...");
-    sync_keys(&p)?;
-    println!("[syncer] Initial sync complete. Watching for changes in template ARB file...");
+pub async fn flutter_gen() {
+    match &mut  tokio::process::Command::new("flutter")
+                .arg("gen-l10n")
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn() {
+        Ok(child) => {
+            match child.wait().await {
+                Ok(_) => println!("[syncer] sync and generation complete"),
+                Err(e) => println!("[syncer] gen-l10n error {e}"),
+            }
+        }
+        Err(e) => println!("[syncer] could not run flutter-genl10n: {e}"),
+    }
+}
 
-    // This watcher specifically monitors the template ARB file.
-    for _ in DirWatcher::new(&p.arb_template_path())?.flatten() {
-        // Debounce: Wait a moment to avoid rapid-fire event processing.
-        std::thread::sleep(std::time::Duration::from_millis(300));
+pub async fn run(p: Project) -> Result<(), String> {
+    println!("[syncer] Started. Making initial sync.");
+    let mut watcher = DirWatcher::new(&p.arb_template_path(), true)?;
+    while  watcher.next().await.is_some() {
+        sleep(std::time::Duration::from_millis(500)).await;
         println!("[syncer] Template ARB file changed. Re-running sync...");
-        if let Err(e) = sync_keys(&p) {
+        if let Err(e) = sync_keys(&p).await {
             println!("[syncer] Error during sync: {}", e);
         }
-        std::thread::sleep(std::time::Duration::from_millis(1000)); // Debounce
-        println!("[syncer] Calling flutter gen-l10n");
-        _ = std::process::Command::new("flutter")
-            .arg("gen-l10n")
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .and_then(|mut p| p.wait());
     }
     Ok(())
 }

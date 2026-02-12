@@ -5,6 +5,7 @@ use regex::Regex;
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
+use tokio::time::sleep;
 
 type ExtractResult = Result<Option<(String, BTreeMap<String, String>)>, String>;
 
@@ -107,7 +108,7 @@ fn ensure_localization_import(project: &Project, content: &mut String) {
     let import_re = Regex::new(&format!("import.*{}", project.localizations_file)).unwrap();
 
     if !import_re.is_match(content) {
-        println!("[extractor] Adding import: {}", import_statement);
+        print!("[extractor] Adding {}", import_statement);
         content.insert_str(0, &import_statement);
     }
 }
@@ -120,7 +121,7 @@ fn process_file(p: &Project, path: &Path) -> Result<(), String> {
             }
             std::fs::write(path, modified_content).map_err(|e| e.to_string())?;
             println!(
-                "[extractor] Updated {} and template ARB file.",
+                "[extractor] Updated {}.",
                 path.display()
             );
         }
@@ -138,25 +139,24 @@ fn process_file(p: &Project, path: &Path) -> Result<(), String> {
 
 pub async fn run(p: Project) -> Result<(), String> {
     let lib_dir = p.root_dir.join("lib");
-    println!("[extractor] Starting initial scan of 'lib/' directory...");
-    for entry in stringe("Could not list files in arb", std::fs::read_dir(&lib_dir))? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path();
-        if path.is_file() && path.extension().is_some_and(|ext| ext == "dart") {
-            process_file(&p, path.as_path())?;
-        }
-    }
-    println!("[extractor] Initial scan complete. Now watching for changes...");
 
-    for path in DirWatcher::new(&lib_dir)?.flatten() {
-        if path.is_file() && path.extension().is_some_and(|ext| ext == "dart") {
-            std::thread::sleep(std::time::Duration::from_millis(300)); // Debounce
-            if let Err(e) = process_file(&p, &path) {
-                println!(
-                    "[extractor] Error processing change for {}: {}",
-                    path.display(),
-                    e
-                );
+    println!("[extractor] Extractor started, making initial run");
+
+    let mut watcher = DirWatcher::new(&lib_dir, true)?;
+    while let Some(path) = watcher.next().await {
+        sleep(std::time::Duration::from_millis(300)).await; // Debounce
+        if path.is_file() && path.extension().is_some_and(|ext| ext == "dart") && let Err(e) = process_file(&p, &path) {
+            println!(
+                "[extractor] Error processing change for {}: {}",
+                path.display(),
+                e
+            );
+        } else {
+            for entry in stringe("Could not list files in lib/ directory", std::fs::read_dir(&lib_dir))?.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().is_some_and(|ext| ext == "dart") {
+                    process_file(&p, path.as_path())?;
+                }
             }
         }
     }
