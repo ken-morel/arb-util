@@ -10,8 +10,9 @@ more adaptible, well... *better*.
 Arb util is meant to help flutter developers like my friend https://github.com/dct-berinyuy (guess
 I'm not that really into flutter myself), by handling arb files for them, including extraction
 of marked strings from the file(very rough on the edges), and translating to other languages with
-a local model, since those google and copilot api things are quite that expensive(seriously,
-up to 6k per month!!!).
+gemini api using `gemini-2.5-flash-lite` which has flash-speed, and is free as of now at least,
+since most chatgpt and copilot api things are quite that expensive(seriously,
+up to 6k per month!!! For work yeah but not for translations).
 
 ## usage
 
@@ -29,10 +30,12 @@ processes you should reload pretty must just after.
 
 You can still edit the main arb file(which will invalidate translations in the other ones), or
 alter the translations in an other arb file, but preferably kill `arb-util` before doing that,
-to help you this's the command: `pkill -9 arb-util`, good time!
+to help you this's the command: `pkill -9 arb-util`, though `pkill -INT arb-util` would be nicer,
+have a good time!
 
 Just in case I did not say it before, arb-util is a tool with no subcommand(since it does just the
-same thing) it is devided into three files, and 3 parallel jobs.
+same thing) it is devided into three asynchronious tasks, for yes I delegated most of it's work to
+tasks, and hope the scheduler is a good one.
 
 ## The extractor
 
@@ -61,23 +64,18 @@ translated, then it calls `flutter gen-l10n` to update the generated files.
 Translates the arb file strings to other languages.
 Located at [./src/translator.rs](./src/translator.rs)
 
-This assumes the existense of a `translate` script(see https://gist.github.com/4ac4e37ac61898a32b9142fcbb80c35b)
-which should be a simple script taking text to translate via stdin, target language as first
-argument(i.e the suffix in your arb file names, e.g en, fr, en-us) and outputs the translation.
-
+It uses google ai's gemini api to query `gemini-2.5-flash-lite`, I'm sure I said this already, because
+it works pretty well, should not consume that much and is ultra-fast.
 It will run over the other arb files to look for untranslated strings(preceded with "#") and
-translate them sequentially.
+translate them in parallel, or I should precise the requests are done in seperate tasks(with of course
+a single writter task).
 
-In future...:
--  maybe make translation parallel.. It's not so hard, just add rayon and replace the `into_iter` to `into_par_iter`.
-  but that WILL surely lead to race conditions in case of several translations in the same file.
-- Adding some config options for:
-  - choosing the name of the translate script.
-  - choosing another prefix than '#'
-  (pretty easy to do by altering the source code).
+## Gemini api
+
+arb-util reads `GEMINI_API_KEY` environment variable and makes a `reqwest` at the openai compatible
+url.
 
 ## Very important advice
 
 Don't forget to stage, and commit. Well, there are still changes that `arb-util` messes up with your
-files, though that shouldn't happen.
-
+files, though that shouldn't happen, I use it myself in [Book Bridge](https://github.com/ken-morel/book-bridge).
