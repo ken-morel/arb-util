@@ -62,12 +62,22 @@ fn find_untranslated_strings(project: &Project) -> Result<Vec<TranslationJob>, S
 
 
 pub async fn run(p: Project) -> Result<(), String> {
+    let api_key = match env::var("GEMINI_API_KEY") {
+        Ok(k) => k,
+        Err(e) => {
+            println!("[translator] #################### GEMINI rate limit exceded ####################");
+            print!("\x07");
+            println!("[translator]                     Closing translation job");
+            return Err(format!("{e}"));
+        }
+
+    };
     println!("[translator] Translator started, making initial run");
     let l10n_dir = p.root_dir.join(&p.l10n_dir);
 
     let mut watcher =DirWatcher::new(&l10n_dir, true)?;
 
-    while  watcher.next().await.is_some() {
+    while watcher.next().await.is_some() {
         sleep(std::time::Duration::from_millis(5000)).await;
 
         let jobs = find_untranslated_strings(&p)?;
@@ -94,24 +104,26 @@ pub async fn run(p: Project) -> Result<(), String> {
         });
 
         for job in jobs.into_iter() {
+            let api_key = api_key.clone();
             let tx = tx.clone();
 
             tokio::spawn(async move {
                 println!("[translator] Translating '{}' to {}", job.key, job.lang);
 
                 // Do the heavy lifting (Network I/O)
-                match translate(&job.text, &job.lang).await {
-                    Ok(translated_text) => {
+                match translate(&api_key ,&job.text, &job.lang).await {
+                    TranslateResult::Translated(translated_text) => {
                         if tx.send((job, translated_text)).await.is_err() {
                             eprintln!("[translator] Failed to send result to writer");
                         }
                     }
-                    Err(e) => {
+                    TranslateResult::Error(e) => {
                         println!(
                             "  [translator] ERROR: Failed to translate key '{}': {}",
                             job.key, e
                         );
                     }
+                    TranslateResult::RateLimitExceeded => {}
                 }
             });
         }
@@ -133,10 +145,14 @@ use std::env;
 use reqwest::Client;
 use serde_json::{json, Value};
 
-pub async fn translate(txt: &str, lang: &str) -> Result<String, String> {
+pub enum TranslateResult {
+    Translated(String),
+    Error(String),
+    RateLimitExceeded,
+}
+pub async fn translate(api_key: &str,txt: &str, lang: &str) -> TranslateResult {
     // Retrieve the Gemini API key from environment variables
-    let api_key = env::var("GEMINI_API_KEY")
-        .map_err(|e| format!("GEMINI_API_KEY environment variable not set: {}", e))?;
+
 
     let client = Client::new();
     let api_url = "https://generativelanguage.googleapis.com/v1beta/openai/v1/chat/completions";
@@ -164,29 +180,39 @@ formatting. Ensure the output is clean and ready for direct use.",
     });
 
     // Make the POST request to the Gemini API
-    let response = client.post(api_url)
+    let response = match client.post(api_url)
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&request_body)
         .send()
-        .await
-        .map_err(|e| format!("Failed to send request to Gemini API: {}", e))?;
+        .await {
+            Err(e) => return TranslateResult::Error(format!("Failed to send request to Gemini API: {}", e)),
+            Ok(r) => r,
+    };
 
     // Check for HTTP errors
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response.text().await.unwrap_or_else(|_| "Unknown API error".to_string());
-        return Err(format!("Gemini API returned an error status: {} - {}", status, error_text));
+        if status == 429 && error_text.contains("You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits") {
+            return TranslateResult::RateLimitExceeded;
+        } else {
+            return TranslateResult::Error(format!("Gemini API returned an error status: {} - {}", status, error_text));
+
+        }
     }
 
     // Parse the JSON response
-    let response_body: Value = response.json().await
-        .map_err(|e| format!("Failed to parse Gemini API response as JSON: {}", e))?;
+    let response_body: Value = match response.json().await {
+        Err(e) => return TranslateResult::Error(format!("Failed to parse Gemini API response as JSON: {}", e)),
+        Ok(v) => v,
+    };
+
 
     // Extract the translated text from the response
     if let Some(translated_text) = response_body["choices"][0]["message"]["content"].as_str() {
-        Ok(translated_text.to_string())
+        TranslateResult::Translated(translated_text.to_string())
     } else {
-        Err(format!("Could not find translated content in API response: {}", response_body))
+        TranslateResult::Error(format!("Could not find translated content in API response: {}", response_body))
     }
 }
