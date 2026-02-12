@@ -1,5 +1,8 @@
 use super::{arb::ArbFile, project::Project, watcher::DirWatcher};
 use tokio::{sync::mpsc::channel,time::sleep};
+use std::{env};
+use reqwest::Client;
+use serde_json::{json, Value};
 
 
 #[derive(Debug)]
@@ -60,6 +63,10 @@ fn find_untranslated_strings(project: &Project) -> Result<Vec<TranslationJob>, S
     Ok(jobs)
 }
 
+struct Boolainer {
+    value: bool,
+}
+
 
 pub async fn run(p: Project) -> Result<(), String> {
     let api_key = match env::var("GEMINI_API_KEY") {
@@ -103,14 +110,16 @@ pub async fn run(p: Project) -> Result<(), String> {
             println!("[translator] Written {} translations to disk.", count);
         });
 
+
+        let (rate_tx, rate_rx) = channel(jobs.len());
+
         for job in jobs.into_iter() {
             let api_key = api_key.clone();
             let tx = tx.clone();
+            let rate_tx = rate_tx.clone();
 
             tokio::spawn(async move {
                 println!("[translator] Translating '{}' to {}", job.key, job.lang);
-
-                // Do the heavy lifting (Network I/O)
                 match translate(&api_key ,&job.text, &job.lang).await {
                     TranslateResult::Translated(translated_text) => {
                         if tx.send((job, translated_text)).await.is_err() {
@@ -123,27 +132,33 @@ pub async fn run(p: Project) -> Result<(), String> {
                             job.key, e
                         );
                     }
-                    TranslateResult::RateLimitExceeded => {}
+                    TranslateResult::RateLimitExceeded => {
+                        _ = rate_tx.send(()).await;
+                    }
                 }
             });
         }
 
         drop(tx);
 
+
+
         if let Err(e) = writer_handle.await {
             println!("[translator] Writer task panicked: {}", e);
         }
 
         println!("[translator] Batch completed");
+        if !rate_rx.is_empty() {
+            println!("[translator]    ######################## Rate Limit exceeded ###################");
+            println!("[translator]                       pausing translations for 10 minutes");
+            sleep(std::time::Duration::from_mins(10)).await;
+        }
     }
     Ok(())
 }
 
 
 
-use std::env;
-use reqwest::Client;
-use serde_json::{json, Value};
 
 pub enum TranslateResult {
     Translated(String),
