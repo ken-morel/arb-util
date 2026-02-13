@@ -101,10 +101,13 @@ fn create_metadata(txt: &str) -> Map<String, Value> {
     let regex = Regex::new("\\{(\\w+)\\}").unwrap();
 
     let mut placeholders = Map::new();
-    for captures in  regex.captures_iter(txt) {
+    for captures in regex.captures_iter(txt) {
         let mut val = Map::new();
         val.insert(String::from("type"), Value::String(String::from("String")));
-        placeholders.insert(String::from(captures.get(1).unwrap().as_str()), Value::Object(val));
+        placeholders.insert(
+            String::from(captures.get(1).unwrap().as_str()),
+            Value::Object(val),
+        );
     }
     if !placeholders.is_empty() {
         metadata.insert(String::from("placeholders"), Value::Object(placeholders));
@@ -138,10 +141,7 @@ fn process_file(p: &Project, path: &Path) -> Result<(), String> {
                 ensure_localization_import(p, &mut modified_content);
             }
             std::fs::write(path, modified_content).map_err(|e| e.to_string())?;
-            println!(
-                "[extractor] Updated {}.",
-                path.display()
-            );
+            println!("[extractor] Updated {}.", path.display());
         }
         Ok(None) => {}
         Err(e) => {
@@ -163,14 +163,22 @@ pub async fn run(p: Project) -> Result<(), String> {
     let mut watcher = DirWatcher::new(&lib_dir, true)?;
     while let Some(path) = watcher.next().await {
         sleep(std::time::Duration::from_millis(300)).await; // Debounce
-        if path.is_file() && path.extension().is_some_and(|ext| ext == "dart") && let Err(e) = process_file(&p, &path) {
+        if path.is_file()
+            && path.extension().is_some_and(|ext| ext == "dart")
+            && let Err(e) = process_file(&p, &path)
+        {
             println!(
                 "[extractor] Error processing change for {}: {}",
                 path.display(),
                 e
             );
         } else {
-            for entry in stringe("Could not list files in lib/ directory", std::fs::read_dir(&lib_dir))?.flatten() {
+            for entry in stringe(
+                "Could not list files in lib/ directory",
+                std::fs::read_dir(&lib_dir),
+            )?
+            .flatten()
+            {
                 let path = entry.path();
                 if path.is_file() && path.extension().is_some_and(|ext| ext == "dart") {
                     process_file(&p, path.as_path())?;

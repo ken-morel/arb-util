@@ -14,13 +14,22 @@ async fn main() -> Result<(), String> {
     let p = project::Project::load()?;
     println!("{p:#?}");
 
-    let extractor_handle =tokio::spawn(extractor::run(p.clone()));
+    let extractor_handle = tokio::spawn(extractor::run(p.clone()));
     let syncer_handle = tokio::spawn(syncer::run(p.clone()));
     let translator_handle = tokio::spawn(translator::run(p.clone()));
 
-    extractor_handle.await.expect("Extractor task failed").expect("Extractor task failed");
-    syncer_handle.await.expect("Extractor async task failed").expect("Syncer task failed");
-    translator_handle.await.expect("Extractor async task failed").expect("Translator task failed");
+    extractor_handle
+        .await
+        .expect("Extractor task failed")
+        .expect("Extractor task failed");
+    syncer_handle
+        .await
+        .expect("Extractor async task failed")
+        .expect("Syncer task failed");
+    translator_handle
+        .await
+        .expect("Extractor async task failed")
+        .expect("Translator task failed");
 
     Ok(())
 }

@@ -1,6 +1,6 @@
-use notify::{recommended_watcher, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, recommended_watcher};
 use std::path::{Path, PathBuf};
-use tokio::sync::mpsc::{channel, Receiver};
+use tokio::sync::mpsc::{Receiver, channel};
 
 use crate::utils::stringe;
 
@@ -12,9 +12,7 @@ pub struct DirWatcher {
 
 impl DirWatcher {
     pub fn new(path: &Path, initial_run: bool) -> Result<Self, String> {
-
         let (tx, rx) = channel(100);
-
 
         let mut watcher = stringe(
             "error creating file watcher",
@@ -22,7 +20,6 @@ impl DirWatcher {
                 let _ = tx.blocking_send(res);
             }),
         )?;
-
 
         stringe(
             "Error starting watcher",
@@ -42,22 +39,18 @@ impl DirWatcher {
             return Some(PathBuf::new());
         }
 
-
         while let Some(res) = self.rx.recv().await {
             match res {
-                Ok(event) => {
-
-                    match event.kind {
-                        EventKind::Modify(_) | EventKind::Create(_) => {
-                            for path in event.paths {
-                                if path.exists() {
-                                    return Some(path);
-                                }
+                Ok(event) => match event.kind {
+                    EventKind::Modify(_) | EventKind::Create(_) => {
+                        for path in event.paths {
+                            if path.exists() {
+                                return Some(path);
                             }
                         }
-                        _ => continue,
                     }
-                }
+                    _ => continue,
+                },
                 Err(e) => {
                     println!("watch error: {:?}", e);
                     continue;

@@ -54,17 +54,16 @@ async fn sync_keys(project: &Project) -> Result<(), String> {
 }
 
 pub async fn flutter_gen() {
-    match &mut  tokio::process::Command::new("flutter")
-                .arg("gen-l10n")
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .spawn() {
-        Ok(child) => {
-            match child.wait().await {
-                Ok(_) => println!("[syncer] sync and generation complete"),
-                Err(e) => println!("[syncer] gen-l10n error {e}"),
-            }
-        }
+    match &mut tokio::process::Command::new("flutter")
+        .arg("gen-l10n")
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+    {
+        Ok(child) => match child.wait().await {
+            Ok(_) => println!("[syncer] sync and generation complete"),
+            Err(e) => println!("[syncer] gen-l10n error {e}"),
+        },
         Err(e) => println!("[syncer] could not run flutter-genl10n: {e}"),
     }
 }
@@ -72,7 +71,7 @@ pub async fn flutter_gen() {
 pub async fn run(p: Project) -> Result<(), String> {
     println!("[syncer] Started. Making initial sync.");
     let mut watcher = DirWatcher::new(&p.arb_template_path(), true)?;
-    while  watcher.next().await.is_some() {
+    while watcher.next().await.is_some() {
         sleep(std::time::Duration::from_millis(500)).await;
         println!("[syncer] Template ARB file changed. Re-running sync...");
         if let Err(e) = sync_keys(&p).await {
